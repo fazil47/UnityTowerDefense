@@ -7,9 +7,11 @@ public enum GameTileContentType
     Empty,
     Destination,
     Wall,
-    SpawnPoint
+    SpawnPoint,
+    Tower
 }
 
+[SelectionBase]
 public class GameTileContent : MonoBehaviour
 {
     [SerializeField] private GameTileContentType type = default;
@@ -26,10 +28,16 @@ public class GameTileContent : MonoBehaviour
         }
     }
 
+    public bool BlocksPath => Type == GameTileContentType.Wall || Type == GameTileContentType.Tower;
+
     public GameTileContentType Type => type;
 
     public void Recycle()
     {
         originFactory.Reclaim(this);
+    }
+
+    public virtual void GameUpdate()
+    {
     }
 }

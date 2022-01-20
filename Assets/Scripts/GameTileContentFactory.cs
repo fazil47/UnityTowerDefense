@@ -3,10 +3,13 @@ using UnityEngine;
 [CreateAssetMenu]
 public class GameTileContentFactory : GameObjectFactory
 {
-    [SerializeField] private GameTileContent destinationPrefab = default,
+    [SerializeField] private GameTileContent
+        destinationPrefab = default,
         emptyPrefab = default,
         wallPrefab = default,
         spawnPointPrefab = default;
+
+    [SerializeField] private Tower towerPrefab = default;
 
     public void Reclaim(GameTileContent content)
     {
@@ -22,6 +25,7 @@ public class GameTileContentFactory : GameObjectFactory
             case GameTileContentType.Empty: return Get(emptyPrefab);
             case GameTileContentType.Wall: return Get(wallPrefab);
             case GameTileContentType.SpawnPoint: return Get(spawnPointPrefab);
+            case GameTileContentType.Tower: return Get(towerPrefab);
         }
 
         Debug.Assert(false, "Unsupported type: " + type);

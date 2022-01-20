@@ -63,6 +63,8 @@ public class Game : MonoBehaviour
         }
 
         _enemies.GameUpdate();
+        Physics.SyncTransforms();
+        board.GameUpdate();
     }
 
     private void HandleTouch()
@@ -70,7 +72,14 @@ public class Game : MonoBehaviour
         GameTile tile = board.GetTile(TouchRay);
         if (tile != null)
         {
-            board.ToggleWall(tile);
+            if (Input.GetKey(KeyCode.LeftShift))
+            {
+                board.ToggleTower(tile);
+            }
+            else
+            {
+                board.ToggleWall(tile);
+            }
         }
     }
 
