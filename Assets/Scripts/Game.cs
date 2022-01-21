@@ -6,10 +6,37 @@ public class Game : MonoBehaviour
     [SerializeField] private Vector2Int boardSize = new Vector2Int(11, 11);
     [SerializeField] private GameBoard board = default;
     [SerializeField] private GameTileContentFactory tileContentFactory = default;
-    [SerializeField] EnemyFactory enemyFactory = default;
-    [SerializeField, Range(0.1f, 10f)] float spawnSpeed = 1f;
+    [SerializeField] private WarFactory warFactory = default;
+    [SerializeField] private EnemyFactory enemyFactory = default;
+    [SerializeField, Range(0.1f, 10f)] private float spawnSpeed = 1f;
+
+    private float _spawnProgress = 0f;
+    private GameBehaviorCollection _enemies = new GameBehaviorCollection();
+    private GameBehaviorCollection _nonEnemies = new GameBehaviorCollection();
+    private TowerType _selectedTowerType;
 
     private Ray TouchRay => Camera.main.ScreenPointToRay(Input.mousePosition);
+
+    static Game instance;
+
+    public static Shell SpawnShell()
+    {
+        Shell shell = instance.warFactory.Shell;
+        instance._nonEnemies.Add(shell);
+        return shell;
+    }
+
+    public static Explosion SpawnExplosion()
+    {
+        Explosion explosion = instance.warFactory.Explosion;
+        instance._nonEnemies.Add(explosion);
+        return explosion;
+    }
+
+    private void OnEnable()
+    {
+        instance = this;
+    }
 
     private void Awake()
     {
@@ -29,10 +56,6 @@ public class Game : MonoBehaviour
             boardSize.y = 2;
         }
     }
-
-    private float _spawnProgress = 0f;
-
-    private EnemyCollection _enemies = new EnemyCollection();
 
     private void Update()
     {
@@ -55,6 +78,15 @@ public class Game : MonoBehaviour
             board.showGrid = !board.showGrid;
         }
 
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            _selectedTowerType = TowerType.Laser;
+        }
+        else if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            _selectedTowerType = TowerType.Mortar;
+        }
+
         _spawnProgress += spawnSpeed * Time.deltaTime;
         while (_spawnProgress >= 1f)
         {
@@ -65,6 +97,7 @@ public class Game : MonoBehaviour
         _enemies.GameUpdate();
         Physics.SyncTransforms();
         board.GameUpdate();
+        _nonEnemies.GameUpdate();
     }
 
     private void HandleTouch()
@@ -74,7 +107,7 @@ public class Game : MonoBehaviour
         {
             if (Input.GetKey(KeyCode.LeftShift))
             {
-                board.ToggleTower(tile);
+                board.ToggleTower(tile, _selectedTowerType);
             }
             else
             {
