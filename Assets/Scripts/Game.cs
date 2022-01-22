@@ -7,41 +7,62 @@ public class Game : MonoBehaviour
     [SerializeField] private GameBoard board = default;
     [SerializeField] private GameTileContentFactory tileContentFactory = default;
     [SerializeField] private WarFactory warFactory = default;
-    [SerializeField] private EnemyFactory enemyFactory = default;
-    [SerializeField, Range(0.1f, 10f)] private float spawnSpeed = 1f;
+    [SerializeField] private GameScenario scenario = default;
+    [SerializeField, Range(0, 100)] private int startingPlayerHealth = 10;
+    [SerializeField, Range(1f, 10f)] private float playSpeed = 1f;
 
-    private float _spawnProgress = 0f;
+    private const float _pausedTimeScale = 0f;
+
+    private GameScenario.State _activeScenario;
     private GameBehaviorCollection _enemies = new GameBehaviorCollection();
     private GameBehaviorCollection _nonEnemies = new GameBehaviorCollection();
     private TowerType _selectedTowerType;
+    private int _playerHealth;
+
+    private static Game _instance;
 
     private Ray TouchRay => Camera.main.ScreenPointToRay(Input.mousePosition);
 
-    static Game instance;
+    public static void EnemyReachedDestination()
+    {
+        _instance._playerHealth -= 1;
+    }
 
     public static Shell SpawnShell()
     {
-        Shell shell = instance.warFactory.Shell;
-        instance._nonEnemies.Add(shell);
+        Shell shell = _instance.warFactory.Shell;
+        _instance._nonEnemies.Add(shell);
         return shell;
     }
 
     public static Explosion SpawnExplosion()
     {
-        Explosion explosion = instance.warFactory.Explosion;
-        instance._nonEnemies.Add(explosion);
+        Explosion explosion = _instance.warFactory.Explosion;
+        _instance._nonEnemies.Add(explosion);
         return explosion;
+    }
+
+    public static void SpawnEnemy(EnemyFactory factory, EnemyType type)
+    {
+        GameTile spawnPoint = _instance.board.GetSpawnPoint(
+            UnityEngine.Random.Range(0, _instance.board.SpawnPointCount)
+        );
+        Enemy enemy = factory.Get(type);
+        enemy.SpawnOn(spawnPoint);
+        _instance._enemies.Add(enemy);
     }
 
     private void OnEnable()
     {
-        instance = this;
+        _instance = this;
     }
 
     private void Awake()
     {
+        _playerHealth = startingPlayerHealth;
         board.Initialize(boardSize, tileContentFactory);
         board.showGrid = true;
+        _activeScenario = scenario.Begin();
     }
 
     private void OnValidate()
@@ -55,6 +76,15 @@ public class Game : MonoBehaviour
         {
             boardSize.y = 2;
         }
+    }
+
+    private void BeginNewGame()
+    {
+        _playerHealth = startingPlayerHealth;
+        _enemies.Clear();
+        _nonEnemies.Clear();
+        board.Clear();
+        _activeScenario = scenario.Begin();
     }
 
     private void Update()
@@ -87,12 +117,34 @@ public class Game : MonoBehaviour
             _selectedTowerType = TowerType.Mortar;
         }
 
-        _spawnProgress += spawnSpeed * Time.deltaTime;
-        while (_spawnProgress >= 1f)
+        if (Input.GetKeyDown(KeyCode.Space))
         {
-            _spawnProgress -= 1f;
-            SpawnEnemy();
+            Time.timeScale = Time.timeScale > _pausedTimeScale ? _pausedTimeScale : playSpeed;
         }
+        else if (Time.timeScale > _pausedTimeScale)
+        {
+            Time.timeScale = playSpeed;
+        }
+
+        if (Input.GetKeyDown(KeyCode.B))
+        {
+            BeginNewGame();
+        }
+
+        if (_playerHealth <= 0 && startingPlayerHealth > 0)
+        {
+            Debug.Log("Defeat!");
+            BeginNewGame();
+        }
+
+        if (!_activeScenario.Progress() && _enemies.IsEmpty)
+        {
+            Debug.Log("Victory!");
+            BeginNewGame();
+            // _activeScenario.Progress();
+        }
+
+        _activeScenario.Progress();
 
         _enemies.GameUpdate();
         Physics.SyncTransforms();
@@ -130,14 +182,5 @@ public class Game : MonoBehaviour
                 board.ToggleSpawnPoint(tile);
             }
         }
-    }
-
-    private void SpawnEnemy()
-    {
-        GameTile spawnPoint =
-            board.GetSpawnPoint(UnityEngine.Random.Range(0, board.SpawnPointCount));
-        Enemy enemy = enemyFactory.Get();
-        enemy.SpawnOn(spawnPoint);
-        _enemies.Add(enemy);
     }
 }

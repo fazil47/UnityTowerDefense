@@ -24,13 +24,13 @@ public class Enemy : GameBehavior
         }
     }
 
-    public void Initialize(float scale, float speed, float pathOffset)
+    public void Initialize(float scale, float speed, float pathOffset, float health)
     {
         Scale = scale;
         model.localScale = new Vector3(scale, scale, scale);
         _pathOffset = pathOffset;
         _speed = speed;
-        Health = 100f * scale;
+        Health = health;
     }
 
     public void ApplyDamage(float damage)
@@ -52,18 +52,17 @@ public class Enemy : GameBehavior
     {
         if (Health <= 0f)
         {
-            OriginFactory.Reclaim(this);
+            Recycle();
             return false;
         }
 
         _progress += Time.deltaTime * _progressFactor;
         while (_progress >= 1f)
         {
-            // _tileFrom = _tileTo;
-            // _tileTo = _tileTo.NextTileOnPath;
             if (_tileTo == null)
             {
-                OriginFactory.Reclaim(this);
+                Game.EnemyReachedDestination();
+                Recycle();
                 return false;
             }
 
@@ -88,6 +87,10 @@ public class Enemy : GameBehavior
         return true;
     }
 
+    public override void Recycle()
+    {
+        OriginFactory.Reclaim(this);
+    }
 
     private void PrepareIntro()
     {

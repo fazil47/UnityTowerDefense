@@ -3,7 +3,7 @@ using UnityEngine;
 public class TargetPoint : MonoBehaviour
 {
     private const int enemyLayerMask = 1 << 9;
-    private static Collider[] buffer = new Collider[20];
+    private static Collider[] buffer = new Collider[100];
 
     public Enemy Enemy { get; private set; }
 
