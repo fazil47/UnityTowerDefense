@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class Enemy : GameBehavior
 {
-    [SerializeField] Transform model = default;
+    [SerializeField] private Transform model = default;
 
     private EnemyFactory _originFactory;
     private GameTile _tileFrom, _tileTo;
