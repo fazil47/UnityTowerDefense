@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class GameBoard : MonoBehaviour
@@ -7,15 +8,30 @@ public class GameBoard : MonoBehaviour
     [SerializeField] private GameTile tilePrefab = default;
     [SerializeField] private Texture2D gridTexture = default;
 
-    private static readonly int MainTex = Shader.PropertyToID("_MainTex");
+    [SerializeField] private TextMeshProUGUI
+        lightningTowersLeftText = default,
+        mortarTowersLeftText = default,
+        wallsLeftText = default;
+
+    private static readonly int MainTex = Shader.PropertyToID("_BaseMap");
 
     private Vector2Int _size;
     private GameTile[] _tiles;
+
+    private int
+        _mortarTowerCount,
+        _lightningTowerCount,
+        _wallCount,
+        _maxMortarTowerCount,
+        _maxLightningTowerCount,
+        _maxWallCount;
+
     private Queue<GameTile> _searchFrontier = new Queue<GameTile>();
     private GameTileContentFactory _contentFactory;
     private bool _showPaths, _showGrid;
     private List<GameTile> _spawnPoints = new List<GameTile>();
     private List<GameTileContent> _updatingContent = new List<GameTileContent>();
+    private Vector2Int _initialDestinationPoint, _initialSpawnPointPosition;
 
     public int SpawnPointCount => _spawnPoints.Count;
 
@@ -62,11 +78,24 @@ public class GameBoard : MonoBehaviour
     }
 
 
-    public void Initialize(Vector2Int size, GameTileContentFactory contentFactory)
+    public void Initialize(
+        Vector2Int size,
+        GameTileContentFactory contentFactory,
+        Vector2Int destinationPosition,
+        Vector2Int spawnPointPosition,
+        int maxMortarTowerCount,
+        int maxLightningTowerCount,
+        int maxWallCount
+    )
     {
         _size = size;
         _contentFactory = contentFactory;
         ground.localScale = new Vector3(_size.x, _size.y, 1f);
+        _initialDestinationPoint = destinationPosition;
+        _initialSpawnPointPosition = spawnPointPosition;
+        _maxMortarTowerCount = maxMortarTowerCount;
+        _maxLightningTowerCount = maxLightningTowerCount;
+        _maxWallCount = maxWallCount;
 
         Vector2 offset = new Vector2((_size.x - 1) * 0.5f, (_size.y - 1) * 0.5f);
 
@@ -78,8 +107,6 @@ public class GameBoard : MonoBehaviour
             {
                 Vector3 position = new Vector3(x - offset.x, 0f, y - offset.y);
                 GameTile tile = _tiles[i] = Instantiate(tilePrefab, position, Quaternion.identity, transform);
-                // tile.transform.SetParent(transform, false);
-                // tile.transform.localPosition = new Vector3(x - offset.x, 0f, y - offset.y);
 
                 if (x > 0)
                 {
@@ -104,6 +131,11 @@ public class GameBoard : MonoBehaviour
 
     public void Clear()
     {
+        _mortarTowerCount = _lightningTowerCount = _wallCount = 0;
+        lightningTowersLeftText.text = "Lightning Towers Left: " + _maxLightningTowerCount;
+        mortarTowersLeftText.text = "Mortar Towers Left: " + _maxMortarTowerCount;
+        wallsLeftText.text = "Walls Left: " + _maxWallCount;
+
         foreach (GameTile tile in _tiles)
         {
             tile.Content = _contentFactory.Get(GameTileContentType.Empty);
@@ -111,8 +143,8 @@ public class GameBoard : MonoBehaviour
 
         _spawnPoints.Clear();
         _updatingContent.Clear();
-        ToggleDestination(_tiles[_tiles.Length / 2]);
-        ToggleSpawnPoint(_tiles[0]);
+        ToggleDestination(_tiles[TilePositionToIndex(_initialDestinationPoint)]);
+        ToggleSpawnPoint(_tiles[TilePositionToIndex(_initialSpawnPointPosition)]);
     }
 
     public GameTile GetTile(Ray ray)
@@ -123,7 +155,7 @@ public class GameBoard : MonoBehaviour
             int y = (int)(hit.point.z + _size.y * 0.5f);
             if (x >= 0 && x < _size.x && y >= 0 && y <= _size.y)
             {
-                return _tiles[x + (y * _size.x)];
+                return _tiles[TilePositionToIndex(x, y)];
             }
         }
 
@@ -160,13 +192,14 @@ public class GameBoard : MonoBehaviour
     {
         if (tile.Content.Type == GameTileContentType.Wall)
         {
+            DecrementWallCount();
             tile.Content = _contentFactory.Get(GameTileContentType.Empty);
             FindPaths();
         }
         else if (tile.Content.Type == GameTileContentType.Empty)
         {
             tile.Content = _contentFactory.Get(GameTileContentType.Wall);
-            if (!FindPaths())
+            if (!FindPaths() || !IncrementWallCount())
             {
                 tile.Content = _contentFactory.Get(GameTileContentType.Empty);
                 FindPaths();
@@ -178,22 +211,28 @@ public class GameBoard : MonoBehaviour
     {
         if (tile.Content.Type == GameTileContentType.Tower)
         {
+            TowerType tileTowerType = ((Tower)tile.Content).TowerType;
             _updatingContent.Remove(tile.Content);
-            if (((Tower)tile.Content).TowerType == towerType)
+            if (tileTowerType == towerType)
             {
                 tile.Content = _contentFactory.Get(GameTileContentType.Empty);
                 FindPaths();
+                DecrementTowerCount(towerType);
             }
             else
             {
-                tile.Content = _contentFactory.Get(towerType);
-                _updatingContent.Add(tile.Content);
+                if (IncrementTowerCount(towerType))
+                {
+                    DecrementTowerCount(tileTowerType);
+                    tile.Content = _contentFactory.Get(towerType);
+                    _updatingContent.Add(tile.Content);
+                }
             }
         }
         else if (tile.Content.Type == GameTileContentType.Empty)
         {
             tile.Content = _contentFactory.Get(towerType);
-            if (FindPaths())
+            if (FindPaths() && IncrementTowerCount(towerType))
             {
                 _updatingContent.Add(tile.Content);
             }
@@ -203,8 +242,9 @@ public class GameBoard : MonoBehaviour
                 FindPaths();
             }
         }
-        else if (tile.Content.Type == GameTileContentType.Wall)
+        else if (tile.Content.Type == GameTileContentType.Wall && IncrementTowerCount(towerType))
         {
+            DecrementWallCount();
             tile.Content = _contentFactory.Get(towerType);
             _updatingContent.Add(tile.Content);
         }
@@ -230,6 +270,16 @@ public class GameBoard : MonoBehaviour
     public GameTile GetSpawnPoint(int index)
     {
         return _spawnPoints[index];
+    }
+
+    private int TilePositionToIndex(Vector2Int pos)
+    {
+        return pos.x + (_size.x * pos.y);
+    }
+
+    private int TilePositionToIndex(int x, int y)
+    {
+        return x + (_size.x * y);
     }
 
     private bool FindPaths()
@@ -291,5 +341,70 @@ public class GameBoard : MonoBehaviour
         }
 
         return true;
+    }
+
+    private bool IncrementTowerCount(TowerType type)
+    {
+        if (type == TowerType.Lightning)
+        {
+            if (++_lightningTowerCount > _maxLightningTowerCount)
+            {
+                --_lightningTowerCount;
+                return false;
+            }
+
+            lightningTowersLeftText.text = "Lightning Towers Left: " +
+                                           (_maxLightningTowerCount - _lightningTowerCount);
+        }
+        else if (type == TowerType.Mortar)
+        {
+            if (++_mortarTowerCount > _maxMortarTowerCount)
+            {
+                --_mortarTowerCount;
+                return false;
+            }
+
+            mortarTowersLeftText.text = "Mortar Towers Left: " + (_maxMortarTowerCount - _mortarTowerCount);
+        }
+
+        return true;
+    }
+
+    private bool IncrementWallCount()
+    {
+        if (++_wallCount > _maxWallCount)
+        {
+            --_wallCount;
+            return false;
+        }
+
+        wallsLeftText.text = "Walls Left: " + (_maxWallCount - _wallCount);
+
+        return true;
+    }
+
+    private void DecrementTowerCount(TowerType type)
+    {
+        if (type == TowerType.Lightning)
+        {
+            --_lightningTowerCount;
+            Debug.Assert(_lightningTowerCount >= 0, "Lightning Tower Count has gone below 0.");
+            lightningTowersLeftText.text = "Lightning Towers Left: " +
+                                           (_maxLightningTowerCount - _lightningTowerCount);
+        }
+        else if (type == TowerType.Mortar)
+        {
+            --_mortarTowerCount;
+            Debug.Assert(_mortarTowerCount >= 0, "Mortar Tower Count has gone below 0.");
+            mortarTowersLeftText.text = "Mortar Towers Left: " + (_maxMortarTowerCount - _mortarTowerCount);
+        }
+    }
+
+
+    private void DecrementWallCount()
+    {
+        --_wallCount;
+        Debug.Assert(_wallCount >= 0, "Wall Count has gone below 0.");
+        wallsLeftText.text = "Walls Left: " + (_maxWallCount - _wallCount);
     }
 }

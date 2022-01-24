@@ -3,7 +3,7 @@ using UnityEngine;
 
 public enum TowerType
 {
-    Laser,
+    Lightning,
     Mortar
 }
 

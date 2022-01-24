@@ -5,7 +5,7 @@ public class MortarTower : Tower
     [SerializeField, Range(0.5f, 2f)] private float shotsPerSecond = 1f;
     [SerializeField, Range(0.5f, 3f)] private float shellBlastRadius = 1f;
     [SerializeField, Range(1f, 100f)] private float shellDamage = 10f;
-    [SerializeField] private Transform mortar = default;
+    [SerializeField] private Transform mortar = default, mortarBase = default;
 
     private float _launchSpeed, _launchProgress;
 
@@ -51,7 +51,9 @@ public class MortarTower : Tower
         float cosTheta = Mathf.Cos(Mathf.Atan(tanTheta));
         float sinTheta = cosTheta * tanTheta;
 
-        mortar.localRotation = Quaternion.LookRotation(new Vector3(dir.x, tanTheta, dir.y));
+        Quaternion lookRotation = Quaternion.LookRotation(new Vector3(dir.x, tanTheta, dir.y));
+        mortar.localRotation = lookRotation;
+        mortarBase.localRotation = Quaternion.Euler(0, lookRotation.eulerAngles.y, 0);
         Game.SpawnShell().Initialize(
             launchPoint, targetPoint,
             new Vector3(s * cosTheta * dir.x, s * sinTheta, s * cosTheta * dir.y),

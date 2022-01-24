@@ -1,17 +1,19 @@
 using System;
+using TMPro;
+using UnityEditor;
 using UnityEngine;
 
 public class Game : MonoBehaviour
 {
-    [SerializeField] private Vector2Int boardSize = new Vector2Int(11, 11);
     [SerializeField] private GameBoard board = default;
     [SerializeField] private GameTileContentFactory tileContentFactory = default;
     [SerializeField] private WarFactory warFactory = default;
     [SerializeField] private GameScenario scenario = default;
-    [SerializeField, Range(0, 100)] private int startingPlayerHealth = 10;
+    [SerializeField] private LevelConfig levelConfig = default;
     [SerializeField, Range(1f, 10f)] private float playSpeed = 1f;
+    [SerializeField] private TextMeshProUGUI playerHealthText = default, selectedTowerText = default;
+    [SerializeField] private GameObject gameWonPanel = default, gameOverPanel = default, gamePausePanel = default;
 
-    private const float _pausedTimeScale = 0f;
 
     private GameScenario.State _activeScenario;
     private GameBehaviorCollection _enemies = new GameBehaviorCollection();
@@ -26,6 +28,7 @@ public class Game : MonoBehaviour
     public static void EnemyReachedDestination()
     {
         _instance._playerHealth -= 1;
+        _instance.playerHealthText.text = "Player Health: " + _instance._playerHealth;
     }
 
     public static Shell SpawnShell()
@@ -52,6 +55,37 @@ public class Game : MonoBehaviour
         _instance._enemies.Add(enemy);
     }
 
+    public void BeginNewGame()
+    {
+        Time.timeScale = playSpeed;
+        gameWonPanel.SetActive(false);
+        gameOverPanel.SetActive(false);
+        gamePausePanel.SetActive(false);
+
+        _selectedTowerType = TowerType.Lightning;
+        selectedTowerText.text = "Selected Tower: Lightning";
+        _playerHealth = levelConfig.StartingPlayerHealth;
+        playerHealthText.text = "Player Health: " + _playerHealth;
+
+        _enemies.Clear();
+        _nonEnemies.Clear();
+        board.Clear();
+
+        _activeScenario = scenario.Begin();
+    }
+
+    public void QuitGame()
+    {
+        if (Application.isEditor)
+        {
+            EditorApplication.ExitPlaymode();
+        }
+        else
+        {
+            Application.Quit();
+        }
+    }
+
     private void OnEnable()
     {
         _instance = this;
@@ -59,43 +93,27 @@ public class Game : MonoBehaviour
 
     private void Awake()
     {
-        _playerHealth = startingPlayerHealth;
-        board.Initialize(boardSize, tileContentFactory);
+        _playerHealth = levelConfig.StartingPlayerHealth;
+        board.Initialize(
+            levelConfig.GameBoardSize,
+            tileContentFactory,
+            levelConfig.DestinationPosition,
+            levelConfig.SpawnPointPosition,
+            levelConfig.MaxMortarTowerCount,
+            levelConfig.MaxLightningTowerCount,
+            levelConfig.MaxWallCount
+        );
         board.showGrid = true;
-        _activeScenario = scenario.Begin();
+
+        BeginNewGame();
     }
 
-    private void OnValidate()
-    {
-        if (boardSize.x < 2)
-        {
-            boardSize.x = 2;
-        }
-
-        if (boardSize.y < 2)
-        {
-            boardSize.y = 2;
-        }
-    }
-
-    private void BeginNewGame()
-    {
-        _playerHealth = startingPlayerHealth;
-        _enemies.Clear();
-        _nonEnemies.Clear();
-        board.Clear();
-        _activeScenario = scenario.Begin();
-    }
 
     private void Update()
     {
         if (Input.GetMouseButtonDown(0))
         {
             HandleTouch();
-        }
-        else if (Input.GetMouseButtonDown(1))
-        {
-            HandleAlternateTouch();
         }
 
         if (Input.GetKeyDown(KeyCode.V))
@@ -110,38 +128,41 @@ public class Game : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            _selectedTowerType = TowerType.Laser;
+            _selectedTowerType = TowerType.Lightning;
+            selectedTowerText.text = "Selected Tower: Lightning";
         }
         else if (Input.GetKeyDown(KeyCode.Alpha2))
         {
             _selectedTowerType = TowerType.Mortar;
+            selectedTowerText.text = "Selected Tower: Mortar";
         }
 
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Time.timeScale = Time.timeScale > _pausedTimeScale ? _pausedTimeScale : playSpeed;
-        }
-        else if (Time.timeScale > _pausedTimeScale)
+
+        if (Time.timeScale > 0)
         {
             Time.timeScale = playSpeed;
         }
 
-        if (Input.GetKeyDown(KeyCode.B))
+
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            BeginNewGame();
+            gamePausePanel.SetActive(!gamePausePanel.activeSelf);
+            Time.timeScale = !gamePausePanel.activeSelf ? playSpeed : 0;
         }
 
-        if (_playerHealth <= 0 && startingPlayerHealth > 0)
+
+        if (_playerHealth <= 0 && levelConfig.StartingPlayerHealth > 0)
         {
             Debug.Log("Defeat!");
-            BeginNewGame();
+            Time.timeScale = 0;
+            gameOverPanel.SetActive(true);
         }
 
         if (!_activeScenario.Progress() && _enemies.IsEmpty)
         {
             Debug.Log("Victory!");
-            BeginNewGame();
-            // _activeScenario.Progress();
+            Time.timeScale = 0;
+            gameWonPanel.SetActive(true);
         }
 
         _activeScenario.Progress();
@@ -154,6 +175,11 @@ public class Game : MonoBehaviour
 
     private void HandleTouch()
     {
+        if (Time.timeScale == 0)
+        {
+            return;
+        }
+
         GameTile tile = board.GetTile(TouchRay);
         if (tile != null)
         {
