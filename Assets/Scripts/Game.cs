@@ -1,6 +1,8 @@
 using System;
 using TMPro;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 public class Game : MonoBehaviour
@@ -76,14 +78,11 @@ public class Game : MonoBehaviour
 
     public void QuitGame()
     {
-        if (Application.isEditor)
-        {
-            EditorApplication.ExitPlaymode();
-        }
-        else
-        {
-            Application.Quit();
-        }
+#if UNITY_EDITOR
+        EditorApplication.ExitPlaymode();
+#else
+        Application.Quit();
+#endif
     }
 
     private void OnEnable()
